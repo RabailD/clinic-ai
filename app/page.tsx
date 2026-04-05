@@ -53,25 +53,65 @@ export default function HomePage() {
 
     const patient = patientData[0]
 
-    const { error: intakeError } = await supabase.from('intakes').insert([
-      {
-        clinic_id: CLINIC_ID,
-        patient_id: patient.id,
-        source: 'web',
-        raw_text: form.symptoms_details,
-        chief_complaint: form.reason_for_visit,
-        urgency: form.urgency,
-        status: 'new',
-      },
-    ])
+    const { data: intakeData, error: intakeError } = await supabase
+      .from('intakes')
+      .insert([
+        {
+          clinic_id: CLINIC_ID,
+          patient_id: patient.id,
+          source: 'web',
+          raw_text: form.symptoms_details,
+          chief_complaint: form.reason_for_visit,
+          urgency: form.urgency,
+          status: 'new',
+        },
+      ])
+      .select()
 
-    if (intakeError) {
+    if (intakeError || !intakeData || intakeData.length === 0) {
       setMessage('Patient created, but intake failed.')
       setLoading(false)
       return
     }
 
-    setMessage('Intake submitted successfully.')
+    const intake = intakeData[0]
+
+    const summaryResponse = await fetch('/api/generate-summary', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        first_name: form.first_name,
+        last_name: form.last_name,
+        preferred_language: form.preferred_language,
+        reason_for_visit: form.reason_for_visit,
+        symptoms_details: form.symptoms_details,
+        urgency: form.urgency,
+      }),
+    })
+
+    if (!summaryResponse.ok) {
+      setMessage('Patient and intake created, but AI summary generation failed.')
+      setLoading(false)
+      return
+    }
+
+    const aiResult = await summaryResponse.json()
+
+    const { error: summaryError } = await supabase.from('ai_summaries').insert([
+      {
+        intake_id: intake.id,
+        summary: aiResult.summary,
+        structured_json: aiResult,
+      },
+    ])
+
+    if (summaryError) {
+      setMessage('Patient and intake created, but AI summary failed.')
+      setLoading(false)
+      return
+    }
+
+    setMessage('Intake submitted successfully, including AI summary.')
 
     setForm({
       first_name: '',
