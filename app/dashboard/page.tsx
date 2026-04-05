@@ -83,6 +83,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [filter, setFilter] = useState('all')
+  const [search, setSearch] = useState('')
 
   useEffect(() => {
     const loadData = async () => {
@@ -118,30 +119,61 @@ export default function DashboardPage() {
   }
 
   const filteredRows = useMemo(() => {
-    if (filter === 'all') return rows
+    let result = rows
+
     if (filter === 'high-urgency') {
-      return rows.filter((row) => row.urgency.toLowerCase() === 'high')
+      result = result.filter((row) => row.urgency.toLowerCase() === 'high')
+    } else if (filter !== 'all') {
+      result = result.filter((row) => row.status.toLowerCase() === filter)
     }
-    return rows.filter((row) => row.status.toLowerCase() === filter)
-  }, [rows, filter])
+
+    const q = search.trim().toLowerCase()
+
+    if (!q) return result
+
+    return result.filter((row) => {
+      return (
+        row.patient_name.toLowerCase().includes(q) ||
+        row.phone.toLowerCase().includes(q) ||
+        row.chief_complaint.toLowerCase().includes(q) ||
+        row.summary.toLowerCase().includes(q)
+      )
+    })
+  }, [rows, filter, search])
 
   return (
     <main className="min-h-screen bg-white text-black p-8">
       <div className="max-w-6xl mx-auto">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
-          <div>
-            <h1 className="text-3xl font-bold">Clinic Staff Dashboard</h1>
-            <p className="text-gray-600 mt-1">
-              View submitted intakes and update their status.
-            </p>
+        <div className="flex flex-col gap-4 mb-6">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h1 className="text-3xl font-bold">Clinic Staff Dashboard</h1>
+              <p className="text-gray-600 mt-1">
+                View submitted intakes, search records, and update their status.
+              </p>
+            </div>
+
+            <a
+              href="/"
+              className="border px-4 py-2 rounded-lg hover:bg-gray-100"
+            >
+              Back to Intake Form
+            </a>
           </div>
 
-          <div className="flex gap-3 items-center">
-            <label className="text-sm text-gray-600">Filter</label>
+          <div className="flex flex-col md:flex-row gap-3 md:items-center">
+            <input
+              type="text"
+              placeholder="Search name, phone, complaint, or summary"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="border p-3 rounded-lg w-full md:max-w-md"
+            />
+
             <select
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              className="border p-2 rounded-lg"
+              className="border p-3 rounded-lg md:w-56"
             >
               <option value="all">All</option>
               <option value="new">New</option>
@@ -150,13 +182,6 @@ export default function DashboardPage() {
               <option value="closed">Closed</option>
               <option value="high-urgency">High urgency</option>
             </select>
-
-            <a
-              href="/"
-              className="border px-4 py-2 rounded-lg hover:bg-gray-100"
-            >
-              Back to Intake Form
-            </a>
           </div>
         </div>
 
