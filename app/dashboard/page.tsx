@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
 type DashboardRow = {
@@ -82,6 +82,7 @@ export default function DashboardPage() {
   const [rows, setRows] = useState<DashboardRow[]>([])
   const [loading, setLoading] = useState(true)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [filter, setFilter] = useState('all')
 
   useEffect(() => {
     const loadData = async () => {
@@ -116,35 +117,60 @@ export default function DashboardPage() {
     setUpdatingId(null)
   }
 
+  const filteredRows = useMemo(() => {
+    if (filter === 'all') return rows
+    if (filter === 'high-urgency') {
+      return rows.filter((row) => row.urgency.toLowerCase() === 'high')
+    }
+    return rows.filter((row) => row.status.toLowerCase() === filter)
+  }, [rows, filter])
+
   return (
     <main className="min-h-screen bg-white text-black p-8">
       <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
           <div>
             <h1 className="text-3xl font-bold">Clinic Staff Dashboard</h1>
             <p className="text-gray-600 mt-1">
               View submitted intakes and update their status.
             </p>
           </div>
-          <a
-            href="/"
-            className="border px-4 py-2 rounded-lg hover:bg-gray-100"
-          >
-            Back to Intake Form
-          </a>
+
+          <div className="flex gap-3 items-center">
+            <label className="text-sm text-gray-600">Filter</label>
+            <select
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              className="border p-2 rounded-lg"
+            >
+              <option value="all">All</option>
+              <option value="new">New</option>
+              <option value="contacted">Contacted</option>
+              <option value="booked">Booked</option>
+              <option value="closed">Closed</option>
+              <option value="high-urgency">High urgency</option>
+            </select>
+
+            <a
+              href="/"
+              className="border px-4 py-2 rounded-lg hover:bg-gray-100"
+            >
+              Back to Intake Form
+            </a>
+          </div>
         </div>
 
         {loading ? (
           <div className="border rounded-xl p-6">
             <p>Loading dashboard...</p>
           </div>
-        ) : rows.length === 0 ? (
+        ) : filteredRows.length === 0 ? (
           <div className="border rounded-xl p-6">
-            <p>No intakes found yet.</p>
+            <p>No matching intakes found.</p>
           </div>
         ) : (
           <div className="space-y-4">
-            {rows.map((row) => (
+            {filteredRows.map((row) => (
               <div key={row.id} className="border rounded-xl p-6 shadow-sm">
                 <div className="flex flex-wrap gap-3 items-center mb-3">
                   <h2 className="text-xl font-semibold">{row.patient_name}</h2>
