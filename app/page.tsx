@@ -1,9 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { supabase } from '@/lib/supabase'
 
 const CLINIC_ID = '658dbf87-0d24-4f02-a366-30c112e7edf5'
+const N8N_WEBHOOK_URL = process.env.NEXT_PUBLIC_N8N_WEBHOOK_URL
 
 export default function HomePage() {
   const [form, setForm] = useState({
@@ -31,100 +31,62 @@ export default function HomePage() {
     setLoading(true)
     setMessage('')
 
-    const { data: patientData, error: patientError } = await supabase
-      .from('patients')
-      .insert([
-        {
+    if (!N8N_WEBHOOK_URL) {
+      setMessage('Intake service is not configured.')
+      setLoading(false)
+      return
+    }
+
+    try {
+      const webhookResponse = await fetch(N8N_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           clinic_id: CLINIC_ID,
+          source: 'web',
           first_name: form.first_name,
           last_name: form.last_name,
           phone: form.phone,
           email: form.email,
           preferred_language: form.preferred_language,
-        },
-      ])
-      .select()
-
-    if (patientError || !patientData || patientData.length === 0) {
-      setMessage('Failed to create patient.')
-      setLoading(false)
-      return
-    }
-
-    const patient = patientData[0]
-
-    const { data: intakeData, error: intakeError } = await supabase
-      .from('intakes')
-      .insert([
-        {
-          clinic_id: CLINIC_ID,
-          patient_id: patient.id,
-          source: 'web',
-          raw_text: form.symptoms_details,
-          chief_complaint: form.reason_for_visit,
+          reason_for_visit: form.reason_for_visit,
+          symptoms_details: form.symptoms_details,
           urgency: form.urgency,
-          status: 'new',
-        },
-      ])
-      .select()
+        }),
+      })
 
-    if (intakeError || !intakeData || intakeData.length === 0) {
-      setMessage('Patient created, but intake failed.')
+      const contentType = webhookResponse.headers.get('content-type') || ''
+      const webhookBody = contentType.includes('application/json')
+        ? await webhookResponse.json()
+        : null
+
+      if (!webhookResponse.ok || webhookBody?.success === false) {
+        setMessage(
+          webhookBody?.message || 'Failed to submit intake to the intake service.'
+        )
+        setLoading(false)
+        return
+      }
+
+      setMessage(
+        webhookBody?.message || 'Intake submitted successfully.'
+      )
+
+      setForm({
+        first_name: '',
+        last_name: '',
+        phone: '',
+        email: '',
+        preferred_language: '',
+        reason_for_visit: '',
+        symptoms_details: '',
+        urgency: 'medium',
+      })
+    } catch {
+      setMessage('Failed to submit intake to the intake service.')
+    } finally {
       setLoading(false)
-      return
     }
-
-    const intake = intakeData[0]
-
-    const summaryResponse = await fetch('/api/generate-summary', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        first_name: form.first_name,
-        last_name: form.last_name,
-        preferred_language: form.preferred_language,
-        reason_for_visit: form.reason_for_visit,
-        symptoms_details: form.symptoms_details,
-        urgency: form.urgency,
-      }),
-    })
-
-    if (!summaryResponse.ok) {
-      setMessage('Patient and intake created, but AI summary generation failed.')
-      setLoading(false)
-      return
-    }
-
-    const aiResult = await summaryResponse.json()
-
-    const { error: summaryError } = await supabase.from('ai_summaries').insert([
-      {
-        intake_id: intake.id,
-        summary: aiResult.summary,
-        structured_json: aiResult,
-      },
-    ])
-
-    if (summaryError) {
-      setMessage('Patient and intake created, but AI summary failed.')
-      setLoading(false)
-      return
-    }
-
-    setMessage('Intake submitted successfully, including AI summary.')
-
-    setForm({
-      first_name: '',
-      last_name: '',
-      phone: '',
-      email: '',
-      preferred_language: '',
-      reason_for_visit: '',
-      symptoms_details: '',
-      urgency: 'medium',
-    })
-
-    setLoading(false)
   }
 
   return (
